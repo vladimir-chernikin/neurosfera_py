@@ -1,0 +1,19 @@
+# игнорируем venv и служебные папки venv
+bin/
+lib*/
+include/
+share/
+pyvenv.cfg
+
+# питоновский мусор
+__pycache__/
+*.pyc
+
+# git/ci
+.git/
+.github/
+
+# секреты
+.env
+*.env
+/etc/neurosfera/
