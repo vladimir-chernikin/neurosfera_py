@@ -1,19 +1,20 @@
-# игнорируем venv и служебные папки venv
+# --- Python venv (лежит в той же папке) ---
 bin/
-lib*/
 include/
+lib/
+lib64/
 share/
 pyvenv.cfg
 
-# питоновский мусор
+# --- Python cache ---
 __pycache__/
 *.pyc
 
-# git/ci
+# --- Git/CI ---
 .git/
 .github/
 
-# секреты
+# --- Логи и секреты ---
+*.log
 .env
 *.env
-/etc/neurosfera/
