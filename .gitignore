@@ -1,20 +1,21 @@
-# --- Python venv (лежит в той же папке) ---
+# venv
 bin/
 include/
 lib/
+lib64
 lib64/
 share/
 pyvenv.cfg
 
-# --- Python cache ---
+# python cache
 __pycache__/
 *.pyc
 
-# --- Git/CI ---
+# git/ci
 .git/
 .github/
 
-# --- Логи и секреты ---
+# logs & secrets
 *.log
 .env
 *.env
