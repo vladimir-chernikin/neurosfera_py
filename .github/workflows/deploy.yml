@@ -1,0 +1,72 @@
+name: Manual Deploy (safe, via git on server)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag for release (например v1.0.0)'
+        required: true
+      release_title:
+        description: 'Название релиза'
+        required: true
+      restart_services:
+        description: 'Перезапустить сервисы? true/false'
+        required: true
+        default: 'true'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout (for release metadata)
+      uses: actions/checkout@v4
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.event.inputs.release_tag }}
+        name: ${{ github.event.inputs.release_title }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Backup & Update on server via git
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        port: ${{ secrets.SSH_PORT }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          set -e
+          REMOTE_DIR="${{ secrets.REMOTE_PATH }}"
+          BACKUP_DIR="${{ secrets.BACKUP_PATH }}"
+          ts=$(date +%Y%m%d_%H%M%S)
+          sudo mkdir -p "$BACKUP_DIR"
+          # Бэкап текущей папки кода
+          sudo tar -czf "$BACKUP_DIR/release_${{ github.event.inputs.release_tag }}_${ts}.tgz" -C "$REMOTE_DIR" .
+          # Обновление кода через git
+          sudo git config --global --add safe.directory "$REMOTE_DIR"
+          cd "$REMOTE_DIR"
+          sudo git fetch --all
+          sudo git reset --hard origin/main
+          # Установка зависимостей, если есть список
+          if [ -f requirements.txt ]; then
+            sudo "$REMOTE_DIR/bin/pip" install -r requirements.txt || true
+          fi
+
+    - name: Restart services
+      if: ${{ github.event.inputs.restart_services == 'true' }}
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        port: ${{ secrets.SSH_PORT }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          sudo systemctl restart fastapi.service || true
+          sudo systemctl restart gemini_api.service || true
+          sudo systemctl restart media_service.service || true
+          sudo systemctl --no-pager --full status fastapi.service || true
+          sudo systemctl --no-pager --full status gemini_api.service || true
+          sudo systemctl --no-pager --full status media_service.service || true
