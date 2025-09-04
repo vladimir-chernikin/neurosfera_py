@@ -9,34 +9,72 @@ import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
 
 
+def load_env_file(file_path: str) -> None:
+    """
+    Загружает переменные окружения из файла.
+    
+    Args:
+        file_path: Путь к файлу с переменными окружения
+    """
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+
+
 def load_api_key() -> str:
     """
     Загружает API-ключ из переменных окружения.
     
     Сначала пытается загрузить из переменной GEMINI_API_PROXY_KEY.
-    Если не найдена, пытается загрузить из файла api.env для локальной разработки.
+    Если не найдена, пытается загрузить из файлов конфигурации:
+    - /etc/neurosfera/neurosfera.env (для продакшена)
+    - api.env (для локальной разработки)
     
     Returns:
         str: API-ключ для Gemini
         
     Raises:
-        ValueError: Если ключ не найден ни в переменных окружения, ни в файле
+        ValueError: Если ключ не найден ни в переменных окружения, ни в файлах
     """
     # Сначала проверяем переменные окружения
     api_key = os.environ.get("GEMINI_API_PROXY_KEY")
     if api_key:
+        logger.info("API-ключ загружен из переменных окружения")
         return api_key
     
-    # Для локальной разработки пытаемся загрузить из api.env
-    env_file = os.path.join(os.path.dirname(__file__), 'api.env')
-    if os.path.exists(env_file):
-        with open(env_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith('GEMINI_API_PROXY_KEY='):
-                    return line.split('=', 1)[1]
+    # Пытаемся загрузить из файла продакшена
+    prod_env_file = "/etc/neurosfera/neurosfera.env"
+    if os.path.exists(prod_env_file):
+        logger.info(f"Загружаем переменные из файла продакшена: {prod_env_file}")
+        load_env_file(prod_env_file)
+        api_key = os.environ.get("GEMINI_API_PROXY_KEY")
+        if api_key:
+            logger.info("API-ключ успешно загружен из файла продакшена")
+            return api_key
+        else:
+            logger.warning(f"Файл {prod_env_file} найден, но GEMINI_API_PROXY_KEY не найден в нем")
+    else:
+        logger.info(f"Файл продакшена не найден: {prod_env_file}")
     
-    raise ValueError("GEMINI_API_PROXY_KEY не найден в переменных окружения или в файле api.env")
+    # Для локальной разработки пытаемся загрузить из api.env
+    local_env_file = os.path.join(os.path.dirname(__file__), 'api.env')
+    if os.path.exists(local_env_file):
+        logger.info(f"Загружаем переменные из локального файла: {local_env_file}")
+        load_env_file(local_env_file)
+        api_key = os.environ.get("GEMINI_API_PROXY_KEY")
+        if api_key:
+            logger.info("API-ключ успешно загружен из локального файла")
+            return api_key
+        else:
+            logger.warning(f"Файл {local_env_file} найден, но GEMINI_API_PROXY_KEY не найден в нем")
+    else:
+        logger.info(f"Локальный файл не найден: {local_env_file}")
+    
+    raise ValueError("GEMINI_API_PROXY_KEY не найден в переменных окружения или в файлах конфигурации")
 
 
 def setup_logging() -> logging.Logger:
@@ -81,8 +119,10 @@ def configure_gemini_api() -> None:
         raise
 
 
-# Инициализация логирования и API
+# Инициализация логирования
 logger = setup_logging()
+
+# Инициализация API
 configure_gemini_api()
     
 # FastAPI приложение
