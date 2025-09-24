@@ -1,0 +1,137 @@
+MyProject.info
+
+1) Структура репозитория и пути
+
+- Корень репозитория (абсолютный путь на проде):
+  GEMINI: ответь на вопрос: абсолютный путь к рабочей копии репозитория `neurosfera_py` на прод-сервере. Выполни и верни итог:
+    - systemctl list-units --type=service | rg -i 'neuro|gemini|media|uvicorn|gunicorn'
+    - ps aux | rg -i 'uvicorn.*(gemini_api|media_service|main)\.py' | rg -v rg
+    - for p in $(pgrep -f 'uvicorn.*(gemini_api|media_service|main)\.py'); do echo PID=$p CWD=$(readlink -f /proc/$p/cwd); done
+    - find /opt /srv /var/www -maxdepth 2 -type d -iname 'neurosfera*' 2>/dev/null
+
+- Где лежит venv на проде (или создать новый):
+  Текущее (по коду): /opt/neurosfera_venv
+  GEMINI: подтверди существование и версии Python/pip:
+    - test -x /opt/neurosfera_venv/bin/python && /opt/neurosfera_venv/bin/python -V && /opt/neurosfera_venv/bin/pip -V
+
+- Где хранить артефакты телефонии:
+  - папка для аудио TTS: /var/lib/neurosfera/audio (создать, если нет)
+  - логи: /var/log/neurosfera (создать, если нет)
+  GEMINI: создай директории и права (если не существуют):
+    - sudo install -d -m 750 -o neurosfera -g neurosfera /var/lib/neurosfera/audio
+    - sudo install -d -m 750 -o neurosfera -g neurosfera /var/log/neurosfera
+
+- Порты сервисов на проде:
+  - gemini_api.py: 8001 (по коду uvicorn.run(..., host="127.0.0.1", port=8001))
+  - media_service.py: 8002 (по коду uvicorn.run(..., host="0.0.0.0", port=8002))
+  - main.py: 8000 (по README: uvicorn main:app --port 8000)
+  - новый телефония: 8087 (предлагаю; укажи, если конфликтует)
+  GEMINI: проверь занятость портов:
+    - sudo ss -ltnp | rg -E ':(8000|8001|8002|8087)\b'
+
+- Как запускаются сервисы на проде (systemd или screen/pm2):
+  GEMINI: ответь на вопрос и дай имена unit-файлов и пользователя, от которого они запускаются. Выполни:
+    - systemctl list-units --type=service | rg -i 'neuro|gemini|media|main|uvicorn|gunicorn'
+    - sudo systemctl cat neuro-gemini.service neuro-media.service neuro-main.service 2>/dev/null
+    - id -un
+  Пример ожидаемых имён: neuro-gemini.service, neuro-media.service, neuro-main.service; User=neurosfera.
+
+2) Секреты и ENV
+
+- Продовый env-файл:
+  Подтверждаю: /etc/neurosfera/neurosfera.env (используется в `gemini_api.py`/`test_api_key.py`).
+
+- Ключи для добавления в /etc/neurosfera/neurosfera.env:
+  BEELINE_API_TOKEN=
+  OPENAI_API_KEY=
+  GEMINI_API_KEY=
+  SIP_DOMAIN=
+  SIP_USER=
+  SIP_PASS=
+  BOT_TEXT="Здравствуйте. Телефония временно дорабатывается"
+
+- Локальный dev-env:
+  Подтверждаю: используется ./api.env (логика загрузки есть в `gemini_api.py` → `load_env_file()`/`load_api_key()`).
+
+3) Сетевой фронт
+
+- Чем публикуется HTTP (Traefik / Nginx / Caddy):
+  GEMINI: ответь на вопрос и приложи конфиги/labels:
+    - systemctl is-active traefik nginx caddy
+    - traefik version 2>/dev/null || true; nginx -v 2>&1 || true; caddy version 2>/dev/null || true
+    - sudo ls -l /etc/nginx/sites-enabled/ 2>/dev/null || true
+    - sudo docker ps --format '{{.Names}} {{.Image}}' | rg -i 'traefik|nginx|caddy' || true
+
+- Если Traefik: укажи домен/host и схему меток — добавим роутер на порт 8087.
+  GEMINI: выведи labels для существующих сервисов (если docker):
+    - docker inspect <container> | jq '.[0].Config.Labels' 2>/dev/null || true
+
+- Если Nginx: нужен server-block для reverse-proxy на :8087 (дам конфиг после подтверждения фронта).
+
+- Публичный домен/поддомен для телефонии:
+  GEMINI: ответь на вопрос: какой домен использовать для телефонии (например, telephony.neurosfera.su)? Проверь существующие DNS/хосты фронта.
+
+4) SIP (или API) для приёма звонка
+
+- SIP-параметры из cloudpbx.beeline.ru:
+  GEMINI: ответь на вопросы (или запроси ввод):
+    - SIP_DOMAIN=
+    - SIP_USER=
+    - SIP_PASS=
+    - Транспорт (udp|tcp|tls)=
+    - Обязательный кодек (по умолчанию PCMA/PCMU, 8 kHz mono WAV совместимо)=
+
+- Вариант интеграции на первом этапе:
+  Подтверждаю SIP-ветку (автоответ + воспроизведение TTS) как быстрый старт.
+
+- Webhook от Билайн (опционально, на будущее):
+  GEMINI: ответь на вопрос: желаемый URL для приема вебхука, например https://telephony.<домен>/beeline/webhook
+  После подтверждения домена я добавлю endpoint `/beeline/webhook` в сервис телефонии.
+
+5) Git-деплой (Cursor → Git → Prod)
+
+- GitHub-репозиторий и ветки (prod/main/dev) и автодеплой:
+  GEMINI: собери данные:
+    - git -C <WORKTREE> remote -v
+    - git -C <WORKTREE> branch -a --no-color
+    - test -f <WORKTREE>/.git/hooks/post-receive && echo "post-receive: present" || echo "post-receive: absent"
+    - sudo ls -l /etc/systemd/system | rg -i 'neuro|telephony'
+  Где <WORKTREE> — корень рабочей копии (см. п.1).
+
+- Путь к рабочей копии на проде:
+  GEMINI: верни абсолютный путь (см. команды в п.1).
+
+- Скрипт деплоя (шаги после git pull):
+  - /opt/neurosfera_venv/bin/pip install -r requirements.txt
+  - миграция/обновление конфигов baresip (если менялись)
+  - systemctl restart нужных юнитов: neuro-telephony.service, baresip-bot@neurosfera.service, а также существующие (gemini/media/main)
+  GEMINI: подтверди рабочие имена юнитов и добавь в скрипт.
+
+- Интеграция телефонии (по умолчанию):
+  Новые файлы (в корне репо):
+    - telephony_service.py — FastAPI-сервис: ENV-логика как в `gemini_api.py` (используем `load_env_file()` и /etc/neurosfera/neurosfera.env/./api.env); эндпоинты: /health, /say-once, /beeline/webhook; TTS через OpenAI, WAV 8 kHz mono.
+    - requirements.txt — добавить httpx (если нет), опционально pydantic-settings.
+  Системные части (на проде):
+    - Конфиг baresip в /home/neurosfera/.baresip/ (accounts с автоответом; config с module fifo и fifo_path=/tmp/baresip_cmd).
+    - systemd-юниты:
+        - neuro-telephony.service → uvicorn telephony_service:app --port 8087
+        - baresip-bot@neurosfera.service → SIP-клиент с автоответом
+    - Reverse-proxy: Traefik labels или Nginx server-block на :8087.
+  Единый install-скрипт: создание директорий, установка пакетов, выкладка конфигов, enable/start юнитов, sanity-check.
+
+- Мягкая интеграция с текущими модулями:
+  - ENV: прод-ключи в /etc/neurosfera/neurosfera.env, локально ./api.env (совпадает с текущей схемой).
+  - Логи телефонии: /var/log/neurosfera/telephony_service.log (ротацию могу сделать через RotatingFileHandler+gzip по аналогии с `gemini_api.py`).
+  - Порты: 8087 не пересекается с 8000/8001/8002.
+  - Вызовы OpenAI/Gemini: TTS идёт через httpx напрямую, ключ из ENV (не конфликтует с `gemini_api.py`).
+
+- Локальный запуск всех сервисов:
+  Пример Makefile/скрипта (по желанию): uvicorn ... --reload для main, gemini_api, media_service, telephony_service.
+
+Приложение: что уже известно из кода
+- Порты: gemini_api=8001, media_service=8002, main=8000.
+- Логи:
+  - gemini_api → ./gemini_api.log (ротация + gzip)
+  - media_service → /root/media_service.log + stdout
+- ENV: /etc/neurosfera/neurosfera.env (prod), ./api.env (dev)
+- venv: используется путь /opt/neurosfera_venv (для yt-dlp)
