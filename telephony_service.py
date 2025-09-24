@@ -59,13 +59,13 @@ async def tg_send(text: str, parse_mode: str = "HTML"):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID: return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient(timeout=20) as client:
-        await client.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True})
+        await client.post(url, json={"chat_id": str(TELEGRAM_CHAT_ID), "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True})
 
 async def tg_send_document(path: Path, caption: str = ""):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID: return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
     files = {"document": (path.name, path.open("rb"))}
-    data = {"chat_id": TELEGRAM_CHAT_ID, "caption": caption, "parse_mode": "HTML"}
+    data = {"chat_id": str(TELEGRAM_CHAT_ID), "caption": caption, "parse_mode": "HTML"}
     async with httpx.AsyncClient(timeout=None) as client:
         await client.post(url, data=data, files=files)
 
