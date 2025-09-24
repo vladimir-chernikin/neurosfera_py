@@ -92,7 +92,6 @@ def start_baresip():
     # baresip поднимаем отдельным сервисом; здесь оставляем возможность локально стартануть
     if baresip_proc: return
     if not Path("/usr/bin/baresip").exists(): return
-    global baresip_proc
     baresip_proc = subprocess.Popen(
         ["/usr/bin/baresip", "-f", str(BARESIP_HOME)],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True
